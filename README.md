@@ -26,3 +26,41 @@ docker run -it \
   ekristen/openvpn-monitor \
   --nat-source 172.149.0.0/16
 ```
+
+## Example Docker Compose
+
+```yml
+version: '2'
+
+services:
+  openvpn-client:
+    container_name: openvpn-client
+    image: ekristen/openvpn-client
+    command: --config /vpn/client.ovpn --askpass /vpn/client.pwd --auth-nocache
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    volumes:
+      - /data/vpn:/vpn
+
+  openvpn-monitor:
+    container_name: openvpn-monitor
+    image: ekristen/openvpn-monitor
+    command: --network custom_default --nat-source 172.249.1.0/24 --route 10.10.100.0/24
+    restart: always
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - openvpn-client
+  
+networks:
+  default:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.249.0.0/16
+          ip_range: 172.249.1.0/24
+          gateway: 172.249.1.254
+```
