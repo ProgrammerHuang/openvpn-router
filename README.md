@@ -1,5 +1,7 @@
 # openvpn-router
 
+[![David](https://img.shields.io/david/ekristen/openvpn-router.svg)](https://github.com/ekristen/openvpn-router) [![David](https://img.shields.io/david/dev/ekristen/openvpn-router.svg)](https://github.com/ekristen/openvpn-router) [![ImageLayers Layers](https://img.shields.io/imagelayers/layers/ekristen/openvpn-router/latest.svg)](https://hub.docker.com/r/ekristen/openvpn-router/) [![ImageLayers Size](https://img.shields.io/imagelayers/image-size/ekristen/openvpn-router/latest.svg)](https://hub.docker.com/r/ekristen/openvpn-router/) 
+
 Using an openvpn client in a docker container is awesome, but is pointless if you cannot manage to route your traffic through it. There are various ways to route traffic, but most require using the host network, creating routes on the host, or making other odd changes. This tool allows everything to remain in containers.
 
 This is a helper tool for [openvpn-client](https://github.com/ekristen/docker-openvpn-client) docker image. Its purpose is to help manage iptable rules and routes in various containers based on configuration.
