@@ -1,0 +1,20 @@
+{
+  "name": "openvpn-monitor",
+  "version": "1.0.0",
+  "description": "Monitors a docker openvpn-client and creates routes and iptable rules for proper network routing through the VPN",
+  "main": "monitor.js",
+  "dependencies": {
+    "after": "^0.8.1",
+    "bunyan": "^1.7.1",
+    "docker-events": "^0.0.2",
+    "dockerode": "^2.2.10",
+    "minimist": "^1.2.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Erik Kristensen <erik@erikkristensen.com>",
+  "license": "MIT"
+}
