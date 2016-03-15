@@ -1,5 +1,5 @@
 {
-  "name": "openvpn-monitor",
+  "name": "openvpn-router",
   "version": "1.0.0",
   "description": "Monitors a docker openvpn-client and creates routes and iptable rules for proper network routing through the VPN",
   "main": "monitor.js",

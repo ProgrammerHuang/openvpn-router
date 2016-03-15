@@ -1,4 +1,4 @@
-# openvpn-monitor
+# openvpn-router
 
 Using an openvpn client in a docker container is awesome, but is pointless if you cannot manage to route your traffic through it. There are various ways to route traffic, but most require using the host network, creating routes on the host, or making other odd changes. This tool allows everything to remain in containers.
 
@@ -21,9 +21,9 @@ This is a helper tool for [openvpn-client](https://github.com/ekristen/docker-op
 
 ```bash
 docker run -it \
-  --name="openvpn-monitor" \
+  --name="openvpn-router" \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  ekristen/openvpn-monitor \
+  ekristen/openvpn-router \
   --nat-source 172.149.0.0/16
 ```
 
@@ -44,9 +44,9 @@ services:
     volumes:
       - /data/vpn:/vpn
 
-  openvpn-monitor:
-    container_name: openvpn-monitor
-    image: ekristen/openvpn-monitor
+  openvpn-router:
+    container_name: openvpn-router
+    image: ekristen/openvpn-router
     command: --network custom_default --nat-source 172.249.1.0/24 --route 10.10.100.0/24
     restart: always
     volumes:
