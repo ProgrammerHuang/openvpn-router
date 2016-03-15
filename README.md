@@ -49,7 +49,6 @@ services:
     image: ekristen/openvpn-monitor
     command: --network custom_default --nat-source 172.249.1.0/24 --route 10.10.100.0/24
     restart: always
-    network_mode: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:

@@ -3,6 +3,7 @@ var events = require('events')
 
 var after = require('after')
 var bunyan = require('bunyan')
+var through2 = require('through2')
 var minimist = require('minimist')
 var Docker = require('dockerode')
 var DockerEvents = require('docker-events')
@@ -44,77 +45,115 @@ var dockerevents = new DockerEvents({
 var monitor = new events.EventEmitter
 var vpnContainer
 
-function processContainer(container) {
-  if (container.Name.substr(1, container.Name.length) == clientName) {
-    // this is the openvpn-client, exec iptables
 
-    vpnContainer = docker.getContainer(container.Id)
+function addNATRules(container) {
+  natSources.forEach(function(source) {
+    var execOptions = {
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: false,
+      Cmd: [
+        "/bin/sh",
+        "-c",
+        util.format("iptables -t nat -nvL | grep \"SNAT\" | grep \"%s\" | grep \"$(ifconfig tun0 | awk '/t addr:/{gsub(/.*:/,\"\",$2);print $2}')\" || iptables -t nat -A POSTROUTING -s %s -j SNAT --to-source $(ifconfig tun0 | awk '/t addr:/{gsub(/.*:/,\"\",$2);print $2}')", source, source),
+      ]
+    }
+    
+    logger.debug({container: container.Id, source: source, opts: execOptions}, 'docker.exec')
+    
+    vpnContainer.exec(execOptions, function(err, exec) {
+      if (err) {
+        return logger.error({err: err}, 'vpn.container.exec.create error')
+      }
 
-    natSources.forEach(function(source) {
+      exec.start({hijack: true, stdin: true, stdout: true, stderr: true}, function(err, stream) {
+        if (err) {
+          return logger.error({err: err}, 'vpn.container.exec.start error')
+        }
+
+        var streamParser = through2.obj(function(chunk, encoding, callback) {
+          if (chunk.toString().indexOf('Device not found') !== -1) {
+            logger.warn({container: container.Id}, 'tun0 - Device not found')
+            setTimeout(function() {
+              addNATRules(container)
+            }, 5000)
+          }
+
+          this.push(chunk.toString())
+          callback()
+        }).on('data', function(data) {
+          logger.debug({output: data}, 'exec output')
+        })
+        
+        docker.modem.demuxStream(stream, streamParser, streamParser);
+      })
+    })
+  })
+}
+
+
+function addRoutes(container) {
+  vpnContainer.inspect(function(err, vpnContainerDetails) {
+    if (err) {
+      return logger.error({err: err}, 'route.container.vpn.inspect error')
+    }
+
+    var IPAddress = vpnContainerDetails.NetworkSettings.Networks[clientNetwork].IPAddress
+
+    routes.forEach(function(route) {
       var execOptions = {
         AttachStdin: true,
         AttachStdout: true,
         AttachStderr: true,
         Tty: false,
         Cmd: [
-          "/bin/ash",
+          "/bin/sh",
           "-c",
-          util.format("iptables -t nat -nvL | grep \"SNAT\" | grep \"%s\" | grep \"$(ifconfig eth0 | awk '/t addr:/{gsub(/.*:/,\"\",$2);print $2}')\" || iptables -t nat -A POSTROUTING -s %s -j SNAT --to-source $(ifconfig tun0 | awk '/t addr:/{gsub(/.*:/,\"\",$2);print $2}')", source, source),
+          util.format("ip route | grep \"via\" | grep \"%s\" | grep \"%s\" || ip route add %s via %s", route, IPAddress, route, IPAddress),
         ]
       }
-      
-      logger.debug({container: container.Id, source: source, opts: execOptions}, 'docker.exec')
-      
-      vpnContainer.exec(execOptions, function(err, exec) {
+
+      logger.debug({container: container.Id, route: route, opts: execOptions}, 'docker.exec')
+    
+      docker.getContainer(container.Id).exec(execOptions, function(err, exec) {
         if (err) {
-          return logger.error({err: err}, 'vpn.container.exec.create error')
+          return logger.error({err: err}, 'route.container.exec.create error')
         }
+
         exec.start({hijack: true, stdin: true, stdout: true, stderr: true}, function(err, stream) {
           if (err) {
-            return logger.error({err: err}, 'vpn.container.exec.start error')
+            return logger.error({err: err}, 'route.container.exec.start error')
           }
+
+          var streamParser = through2.obj(function(chunk, encoding, callback) {
+            if (chunk.toString().indexOf('File exists')) {
+              logger.error({container: container.Id}, 'route already exists')
+            }
+
+            this.push(chunk.toString())
+            callback()
+          }).on('data', function(data) {
+            logger.debug({output: data}, 'exec output')
+          })
+
+          docker.modem.demuxStream(stream, streamParser, streamParser)
         })
       })
     })
+  })
+}
+
+
+function processContainer(container) {
+  if (container.Name.substr(1, container.Name.length) == clientName) {
+    // this is the openvpn-client, exec iptables
+    return addNATRules(container)
   }
   
   // Check if Route Container Matches 
   if (routeContainers.indexOf(container.Name.substr(1, container.Name.length)) !== -1) {
-    vpnContainer.inspect(function(err, container) {
-      if (err) {
-        return logger.error({err: err}, 'route.container.vpn.inspect error')
-      }
-
-      var IPAddress = container.NetworkSettings.Networks[clientNetwork].IPAddress
-
-      routes.forEach(function(route) {
-        var execOptions = {
-          AttachStdin: true,
-          AttachStdout: true,
-          AttachStderr: true,
-          Tty: false,
-          Cmd: [
-            "/bin/sh",
-            "-c",
-            util.format("ip route | grep \"via\" | grep \"%s\" | grep \"%s\" || ip route add %s via %s", route, IPAddress, route, IPAddress),
-          ]
-        }
-
-        logger.debug({container: container.Id, source: route, opts: execOptions}, 'docker.exec')
-      
-        vpnContainer.exec(execOptions, function(err, exec) {
-          if (err) {
-            return logger.error({err: err}, 'route.container.exec.create error')
-          }
-
-          exec.start({hijack: true, stdin: true, stdout: true, stderr: true}, function(err, stream) {
-            if (err) {
-              return logger.error({err: err}, 'route.container.exec.start error')
-            }
-          })
-        })
-      })
-    })
+    return addRoutes(container)
   }
 }
 
